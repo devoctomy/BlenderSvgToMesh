@@ -13,8 +13,6 @@ deleteOnBoolean = True
 extrudeRooms = True
 createOuter = True
 booleanOuterWithRooms = True
-groupAll = False
-centre = False
 
 roomsToCreate = [] #[ "room1", "corridor1", "room2" ]
 roomKeys = {}
@@ -113,6 +111,7 @@ toRemoveFromCeling = {}
 allPlanes = []
 allCelingDrops = {}
 firstRoomRectId = "unset"
+postJoinObjects = []
 for f in onlyfiles:
     if f.endswith("svg"):
         print("Processing level file '" + mypath + f + "'")
@@ -162,6 +161,7 @@ for f in onlyfiles:
                     planes = CompositePlane(id + ".floor." + key[0], planeXPos + offsetX, planeYPos - offsetY, 0, float(width), float(height), 5, 5)
                     for p in planes:
                         toExtrude[p.name] = p
+                        postJoinObjects.append(p)
                 
                 if key[0] == "CeilingHole":
                     print("Creating ceiling hole '" + id + "'")
@@ -189,6 +189,7 @@ if extrudeRooms == True:
         
     for cd in allCelingDrops:
         ExtrudeUp(allCelingDrops[cd], 2)
+        postJoinObjects.append(allCelingDrops[cd])
 
 if createOuter == True:
     extraWidth = levelWidth + 10
@@ -199,12 +200,16 @@ if createOuter == True:
     if booleanOuterWithRooms == True:
         applyBoolean("DIFFERENCE", bpy.data.objects["Outer"], bpy.data.objects["Rooms"], deleteOnBoolean)
         rootObject = bpy.data.objects["Outer"]
+        
+    postJoinObjects.append(bpy.data.objects["Outer"])
 
 for r in toRemoveFromCeling:
     curObj = toRemoveFromCeling[r]
     curObj.location.z += 10
     ExtrudeUp(curObj, 14)
     applyBoolean("DIFFERENCE", bpy.data.objects["Outer"], curObj, deleteOnBoolean)
+
+JoinObjects(postJoinObjects, "LevelMesh")
 
 #if groupAll:
 #    for o in bpy.data.objects:
