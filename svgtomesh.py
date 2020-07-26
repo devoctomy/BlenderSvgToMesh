@@ -80,6 +80,26 @@ def CreatePlane(objname, px, py, pz, width, height):
 
     return myobject
 
+def JoinObjects(objects, newName):
+    bpy.context.view_layer.objects.active = objects[0]
+    for o in objects:
+        o.select_set(True)      
+    bpy.ops.object.join()
+    objects[0].name = newName
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.remove_doubles()
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.select_all(action='DESELECT')
+
+    return objects[0]
+
+def ExtrudeUp(obj, offset):
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.remove_doubles()
+    bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value":(0, 0, offset)})
+    bpy.ops.object.mode_set(mode='OBJECT')
+
 filepath = bpy.data.filepath
 directory = os.path.dirname(filepath)
 
@@ -91,6 +111,7 @@ levelHeight = 0
 toExtrude = {}
 toRemoveFromCeling = {}
 allPlanes = []
+allCelingDrops = {}
 firstRoomRectId = "unset"
 for f in onlyfiles:
     if f.endswith("svg"):
@@ -126,14 +147,19 @@ for f in onlyfiles:
                     print("Creating room or corridor '" + id + "'")
                     planeXPos = float(x) + float(width)/2
                     planeYPos = (float(y) + float(height)/2) * -1                  
-                    planes = CompositePlane(id + "." + key[0], planeXPos + offsetX, planeYPos - offsetY, 0, float(width), float(height), 5, 5)
+                    planes = CompositePlane(id + ".floor." + key[0], planeXPos + offsetX, planeYPos - offsetY, 0, float(width), float(height), 5, 5)
                     allPlanes.extend(planes)
+                    
+                    if key[0] == "Corridor":
+                        ceilingDropPlanes = CompositePlane(id + ".ceiling." + key[0], planeXPos + offsetX, planeYPos - offsetY, 8, float(width), float(height), 5, 5)
+                        celingDrop = JoinObjects(ceilingDropPlanes, id)
+                        allCelingDrops[id + ".ceiling."] = celingDrop
 
                 if key[0] == "Column":
                     print("Creating comlumn '" + id + "'")
                     planeXPos = float(x) + float(width)/2
                     planeYPos = (float(y) + float(height)/2) * -1                  
-                    planes = CompositePlane(id + "." + key[0], planeXPos + offsetX, planeYPos - offsetY, 0, float(width), float(height), 5, 5)
+                    planes = CompositePlane(id + ".floor." + key[0], planeXPos + offsetX, planeYPos - offsetY, 0, float(width), float(height), 5, 5)
                     for p in planes:
                         toExtrude[p.name] = p
                 
@@ -154,27 +180,21 @@ bpy.ops.mesh.remove_doubles()
 bpy.ops.object.mode_set(mode='OBJECT')
 rootObject = bpy.data.objects["Rooms"]
 bpy.ops.object.select_all(action='DESELECT')    
-toExtrude["Rooms"] = bpy.data.objects["Rooms"]
+toExtrude["Rooms"] = bpy.data.objects["Rooms"]   
     
 if extrudeRooms == True:
     print("Extruding rooms")
     for e in toExtrude:
-        bpy.context.view_layer.objects.active = toExtrude[e]
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.remove_doubles()
-        bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value":(0, 0, 10)})
-        bpy.ops.object.mode_set(mode='OBJECT')
-
+        ExtrudeUp(toExtrude[e], 10)
+        
+    for cd in allCelingDrops:
+        ExtrudeUp(allCelingDrops[cd], 2)
 
 if createOuter == True:
     extraWidth = levelWidth + 10
     extraHeight = levelHeight + 10
     CreatePlane("Outer", (extraWidth/2) - 5, ((extraHeight/2) * -1) + 5, -2, extraWidth, extraHeight)
-    bpy.context.view_layer.objects.active = bpy.data.objects["Outer"]
-    bpy.ops.object.select_all(action='DESELECT')
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value":(0, 0, 14)})
-    bpy.ops.object.mode_set(mode='OBJECT')
+    ExtrudeUp(bpy.data.objects["Outer"], 14)
 
     if booleanOuterWithRooms == True:
         applyBoolean("DIFFERENCE", bpy.data.objects["Outer"], bpy.data.objects["Rooms"], deleteOnBoolean)
@@ -183,11 +203,7 @@ if createOuter == True:
 for r in toRemoveFromCeling:
     curObj = toRemoveFromCeling[r]
     curObj.location.z += 10
-    bpy.context.view_layer.objects.active = curObj
-    bpy.ops.object.select_all(action='DESELECT')
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value":(0, 0, 4)})
-    bpy.ops.object.mode_set(mode='OBJECT')
+    ExtrudeUp(curObj, 14)
     applyBoolean("DIFFERENCE", bpy.data.objects["Outer"], curObj, deleteOnBoolean)
 
 #if groupAll:
